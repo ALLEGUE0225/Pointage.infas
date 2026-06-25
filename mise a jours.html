@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INFAS - Administration Présences</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root { --orange: #FF6F00; --bordeaux: #800020; --blanc: #FFFFFF; }
+        body {
+            margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif;
+            background: repeating-linear-gradient(45deg, var(--orange), var(--orange) 20px, var(--bordeaux) 20px, var(--bordeaux) 40px, var(--blanc) 40px, var(--blanc) 45px);
+            min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px 0;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.98); border-radius: 15px;
+            width: 95%; max-width: 550px; padding: 25px; box-sizing: border-box; text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .header-infas { font-size: 3rem; color: var(--bordeaux); margin-bottom: 5px; }
+        .header-title { color: var(--bordeaux); margin: 0 0 20px 0; text-transform: uppercase; font-size: 1.2rem; }
+        .form-group { margin-bottom: 12px; text-align: left; }
+        label { display: block; margin-bottom: 4px; color: var(--bordeaux); font-weight: 600; font-size: 0.9rem; }
+        input, select {
+            width: 100%; padding: 10px; border: 2px solid var(--orange); border-radius: 8px; box-sizing: border-box; font-size: 15px;
+        }
+        #reader {
+            width: 100%; max-width: 320px; margin: 15px auto; border: 4px solid var(--bordeaux); border-radius: 10px; overflow: hidden; background: #000;
+        }
+        #status { font-weight: bold; margin-top: 10px; color: #333; padding: 8px; border-radius: 5px; background: #eee; }
+        
+        /* Zone de la liste des présents sur l'interface */
+        .presence-list-container {
+            margin-top: 25px; text-align: left; background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 15px; max-height: 250px; overflow-y: auto;
+        }
+        .presence-list-title { color: var(--bordeaux); font-weight: bold; margin-top: 0; border-bottom: 2px solid var(--orange); padding-bottom: 5px; font-size: 1rem; }
+        .table-presence { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .table-presence th { background: #f2f2f2; color: var(--bordeaux); padding: 8px; text-align: left; }
+        .table-presence td { padding: 8px; border-bottom: 1px solid #eee; }
+        .counter-badge { background: var(--orange); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; float: right; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-infas"><i class="fa-solid fa-user-md"></i></div>
+    <h2 class="header-title">INFAS - Session Responsable</h2>
+
+    <div class="form-group">
+        <label><i class="fa-solid fa-users"></i> Mon Groupe Responsable :</label>
+        <select id="resp_groupe">
+            <option value="A">Groupe A</option>
+            <option value="B">Groupe B</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label><i class="fa-solid fa-network-wired"></i> Mon Sous-Groupe :</label>
+        <input type="text" id="resp_sous_groupe" placeholder="Ex: 10, 15, 17...">
+    </div>
+
+    <div class="form-group">
+        <label><i class="fa-solid fa-book"></i> Matière enseignée :</label>
+        <input type="text" id="matiere" placeholder="Ex: Hygiène Hospitalière">
+    </div>
+
+    <button onclick="demarrerScanner()" style="background: var(--bordeaux); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; font-size: 16px;">
+        <i class="fa-solid fa-camera"></i> Activer le Scanner Automatique
+    </button>
+
+    <div id="reader"></div>
+    <div id="status">Remplissez les champs puis activez le scanner.</div>
+
+    <div class="presence-list-container">
+        <h3 class="presence-list-title">
+            <i class="fa-solid fa-list-check"></i> Étudiants Présents Scannés
+            <span class="counter-badge" id="scan_count">0</span>
+        </h3>
+        <table class="table-presence">
+            <thead>
+                <tr>
+                    <th>Heure</th>
+                    <th>Nom & Prénoms</th>
+                    <th>Matricule</th>
+                </tr>
+            </thead>
+            <tbody id="presence_table_body">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // LIGNE 71 : VOTRE LIEN DE SYNCHRONISATION UNIQUE
+    // =========================================================================
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyGJfh0yG2jD9x2F1OWf32_38SgR9v_aI5AoPphfLtoqJ95ypPV7e-5oCZ4suRSXUaPrA/exec"; 
+    
+    let html5QrCode;
+    let localScannedCount = 0;
+    let scannedMatricules = new Set(); // Évite les doublons de scan durant la même session
+
+    function demarrerScanner() {
+        let respGroupe = document.getElementById('resp_groupe').value;
+        let respSousGroupe = document.getElementById('resp_sous_groupe').value.trim();
+        let matiere = document.getElementById('matiere').value.trim();
+
+        if(!respSousGroupe || !matiere) {
+            alert("Veuillez préciser votre Sous-Groupe et la Matière avant de scanner !");
+            return;
+        }
+
+        document.getElementById('status').innerText = "Caméra en cours de démarrage...";
+
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 20, qrbox: { width: 220, height: 220 } };
+
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            config,
+            (decodedText) => { processScan(decodedText, respGroupe, respSousGroupe, matiere); }
+        ).catch(err => {
+            document.getElementById('status').innerHTML = "<span style='color:red;'>Erreur caméra. Vérifiez bien l'accès HTTPS sur Vercel.</span>";
+        });
+    }
+
+    function processScan(decodedText, respGroupe, respSousGroupe, matiere) {
+        try {
+            let etudiant = JSON.parse(decodedText);
+            
+            // Vérifier si l'étudiant a déjà été scanné durant cette session pour éviter les doublons
+            if (scannedMatricules.has(etudiant.matricule)) {
+                document.getElementById('status').innerHTML = `<span style="color:#E65100;"><i class="fa-solid fa-triangle-exclamation"></i> Déjà scanné : ${etudiant.nom_prenom}</span>`;
+                return;
+            }
+
+            document.getElementById('status').innerText = "Envoi de la présence en cours...";
+            let heureActuelle = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+            // Préparation des données pour le Google Sheet central
+            let payload = {
+                respGroupe: respGroupe,
+                respSousGroupe: respSousGroupe,
+                matiere: matiere,
+                nomPrenoms: etudiant.nom_prenom,
+                matricule: etudiant.matricule,
+                groupeEtudiant: etudiant.groupe,
+                sousGroupeEtudiant: etudiant.sous_group
+            };
+
+            // Envoi réseau vers Google Sheet
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                // Succès : Ajouter l'étudiant dans le tableau de l'interface en haut de liste
+                scannedMatricules.add(etudiant.matricule);
+                localScannedCount++;
+                document.getElementById('scan_count').innerText = localScannedCount;
+
+                let tbody = document.getElementById('presence_table_body');
+                let row = `<tr>
+                    <td><b>${heureActuelle}</b></td>
+                    <td>${etudiant.nom_prenom}</td>
+                    <td><code style="background:#eee; padding:2px 5px; border-radius:3px;">${etudiant.matricule}</code></td>
+                </tr>`;
+                tbody.insertAdjacentHTML('afterbegin', row); // Ajoute le dernier scanné tout en haut
+
+                document.getElementById('status').innerHTML = `<span style="color:green;"><i class="fa-solid fa-circle-check"></i> ${etudiant.nom_prenom} enregistré !</span>`;
+                
+                let audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav');
+                audio.play();
+            }).catch(err => {
+                document.getElementById('status').innerText = "Erreur de connexion au serveur Google.";
+            });
+
+        } catch (e) {
+            document.getElementById('status').innerText = "QR code scanné invalide ou mal formaté.";
+        }
+    }
+</script>
+</body>
+</html>
