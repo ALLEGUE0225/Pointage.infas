@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon QR Code Étudiant INFAS</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root { --orange: #FF6F00; --bordeaux: #800020; --marron: #5D4037; --blanc: #FFFFFF; }
+        body {
+            margin: 0; padding: 0; font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, var(--blanc) 0%, var(--blanc) 12%, var(--marron) 12%, var(--marron) 27%, var(--bordeaux) 27%, var(--bordeaux) 57%, var(--orange) 57%, var(--orange) 100%);
+            background-blend-mode: multiply;
+            background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 20%, transparent 20%), radial-gradient(circle at 0 0, rgba(255,255,255,0.1) 40%, transparent 40%);
+            background-size: 40px 40px;
+            min-height: 100vh; display: flex; justify-content: center; align-items: center;
+        }
+        .card { background: white; padding: 25px; border-radius: 15px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 85%; max-width: 380px; }
+        h2 { color: var(--bordeaux); margin-bottom: 15px; font-size: 1.3rem; }
+        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid var(--marron); border-radius: 5px; margin-bottom: 10px; font-size: 14px; }
+        button { background-color: var(--orange); color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #qrcode { margin-top: 15px; display: flex; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Générer ma Clé d'ID Étudiant</h2>
+    
+    <input type="text" id="nom_prenom" placeholder="NOM et PRÉNOMS (Synchronisés)">
+    <input type="text" id="matricule" placeholder="N° Matricule unique (Ex: 25-1663)">
+    <input type="text" id="groupe" placeholder="Groupe (A ou B)">
+    <input type="text" id="sous_groupe" placeholder="Sous-Groupe (Ex: 10)">
+
+    <button onclick="genererQR()">Créer mon Code QR</button>
+    <div id="qrcode"></div>
+</div>
+
+<script>
+    function genererQR() {
+        let nomPrenom = document.getElementById('nom_prenom').value.trim();
+        let matricule = document.getElementById('matricule').value.trim();
+        let groupe = document.getElementById('groupe').value.trim();
+        let sousGroupe = document.getElementById('sous_groupe').value.trim();
+
+        if(!nomPrenom || !matricule || !groupe || !sousGroupe) {
+            alert("Veuillez remplir toutes les informations conformément à la liste.");
+            return;
+        }
+
+        // Modèle synchronisé propre demandé
+        let modèleConforme = {
+            nom_prenom: nomPrenom.toUpperCase(),
+            matricule: matricule.toUpperCase(),
+            groupe: groupe.toUpperCase(),
+            sous_group: sousGroupe.toUpperCase()
+        };
+
+        document.getElementById("qrcode").innerHTML = "";
+
+        new QRCode(document.getElementById("qrcode"), {
+            text: JSON.stringify(modèleConforme),
+            width: 180,
+            height: 180,
+            colorDark : "#800020"
+        });
+    }
+</script>
+</body>
+</html>
